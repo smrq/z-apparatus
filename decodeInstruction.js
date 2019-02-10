@@ -87,9 +87,17 @@ module.exports = function decodeInstruction(state, address) {
 		result.branchIf = !!(state.memory[address] & 0x80);
 		if (state.memory[address] & 0x40) {
 			result.branchOffset = state.memory[address++] & 0x3F;
+			// expand sign from 8 bits to 16 bits
+			if (result.branchOffset & 0x80) {
+				result.branchOffset |= 0xFF00;
+			}
 		} else {
-			result.branchOffset = state.memory[address++] & 0x3F << 8;
+			result.branchOffset = (state.memory[address++] & 0x3F) << 8;
 			result.branchOffset |= state.memory[address++];
+			// expand sign from 14 bits to 16 bits
+			if (result.branchOffset & 0x2000) {
+				result.branchOffset |= 0xC000;
+			}
 		}
 	}
 

@@ -6,6 +6,7 @@ module.exports = function performBranch(state, offset) {
 	} else if (offset === 1) {
 		performReturn(state, 1);
 	} else {
-		state.pc = (state.pc + offset - 2) & 0xFFFF;
+		offset = new Int16Array([offset])[0];
+		state.pc = state.pc + offset - 2;
 	}
 }

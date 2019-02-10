@@ -19,6 +19,9 @@ const {
 	getObjectPropertiesAddress
 } = require('./object');
 const decodePropertyTable = require('./decodePropertyTable');
+const decodeProperty = require('./decodeProperty');
+const parseText = require('./parseText');
+const decodeText = require('./decodeText');
 
 module.exports = function executeInstruction(state, instruction, operands, output, input) {
 	const op = instruction.opcode.op;
@@ -71,6 +74,49 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 
 		} break;
 
+		case 'clear_attr': {
+			/* clear_attr
+				2OP:12 C clear_attr object attribute
+				Make object not have the attribute numbered attribute. */
+			setObjectAttribute(state, operands[0], operands[1], false);
+		} break;
+
+		case 'dec': {
+			/* dec
+				1OP:134 6 dec (variable)
+				Decrement variable by 1. This is signed, so 0 decrements to -1. */
+			const variable = decodeVariable(operands[0]);
+			let value = performDereference(state, variable);
+			value = (value - 1) & 0xFFFF;
+			performStore(state, variable, value);
+		} break;
+
+		case 'dec_chk': {
+			/* dec_chk
+				2OP:4 4 dec_chk (variable) value ?(label)
+				Decrement variable, and branch if it is now less than the given value. */
+			const variable = decodeVariable(operands[0]);
+			let value = performDereference(state, variable);
+			value = (value - 1) & 0xFFFF;
+			performStore(state, variable, value);
+
+			let given = operands[1];
+			[value, given] = new Int16Array([value, given]);
+			const test = value < given;
+
+			if (test === instruction.branchIf) {
+				performBranch(state, instruction.branchOffset);
+			}
+		} break;
+
+		case 'div': {
+			/* div
+				2OP:23 17 div a b -> (result)
+				Signed 16-bit division. Division by zero should halt the interpreter with a suitable error message. */
+			const value = (operands[0] / operands[1]) & 0xFFFF;
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
 		case 'get_child': {
 			/* get_child
 				1OP:130 2 get_child object -> (result) ?(label)
@@ -118,7 +164,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:18 12 get_prop_addr object property -> (result)
 				Get the byte address (in dynamic memory) of the property data for the given object's property.
 				This must return 0 if the object hasn't got the property. */
-			const propertyTableAddress = getObjectPropertiesAddress(operands[0]);
+			const propertyTableAddress = getObjectPropertiesAddress(state, operands[0]);
 			const propertyTable = decodePropertyTable(state, propertyTableAddress);
 			const property = propertyTable.properties.find(entry => entry.number === operands[1]);
 			if (property) {
@@ -126,6 +172,11 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			} else {
 				performStore(state, instruction.resultVariable, 0);
 			}
+		} break;
+
+		case 'get_prop_len': {
+			const property = decodeProperty(state, operands[0]);
+			performStore(state, instruction.resultVariable, property.dataLength);
 		} break;
 
 		case 'get_sibling': {
@@ -160,7 +211,10 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			value = (value + 1) & 0xFFFF;
 			performStore(state, variable, value);
 
-			const test = value > operands[1];
+			let given = operands[1];
+			[value, given] = new Int16Array([value, given]);
+			const test = value > given;
+
 			if (test === instruction.branchIf) {
 				performBranch(state, instruction.branchOffset);
 			}
@@ -264,7 +318,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:16 10 loadb array byte-index -> (result)
 				Stores array->byte-index (i.e., the byte at address array+byte-index, which must lie in static or
 				dynamic memory). */
-			const value = state.memory[operands[0] + 2*operands[1]];
+			const value = state.memory[operands[0] + operands[1]];
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
@@ -274,6 +328,14 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Stores array-->word-index (i.e., the word at address array+2*word-index, which must lie in
 				static or dynamic memory). */
 			const value = read16(state.memory, operands[0] + 2*operands[1]);
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
+		case 'mul': {
+			/* mul
+				2OP:22 16 mul a b -> (result)
+				Signed 16-bit multiplication. */
+			const value = (operands[0] * operands[1]) & 0xFFFF;
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
@@ -325,6 +387,23 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			output.text += propertyTable.shortName;
 		} break;
 
+		case 'print_paddr': {
+			/* print_paddr
+				1OP:141 D print_paddr packed-address-of-string
+				Print the (Z-encoded) string at the given packed address in high memory. */
+			const address = unpackAddress(state, op, operands[0]);
+			const { text } = decodeText(state, address);
+			output.text += text;
+		} break;
+
+		case 'print_ret': {
+			/* print_ret
+				0OP:179 3 print_ret
+				Print the quoted (literal) Z-encoded string, then print a new-line and then return true (i.e., 1). */
+			output.text += instruction.text + '\n';
+			performReturn(state, 1);
+		} break;
+
 		case 'pull': {
 			/* pull
 				VAR:233 9 1 pull (variable)
@@ -367,6 +446,20 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				// Here we just leave the extra data without overwriting it.
 				write16(property.data, 0, operands[2]);
 			}
+		} break;
+
+		case 'random': {
+			/* random
+				VAR:231 7 random range -> (result)
+				If range is positive, returns a uniformly random number between 1 and range. If range is negative,
+				the random number generator is seeded to that value and the return value is 0. Most interpreters
+				consider giving 0 as range illegal (because they attempt a division with remainder by the
+				range), but correct behaviour is to reseed the generator in as random a way as the interpreter can
+				(e.g. by using the time in milliseconds).
+				(Some version 3 games, such as 'Enchanter' release 29, had a debugging verb #random such that
+				typing, say, #random 14 caused a call of random with -14.) */
+			const value = ((Math.random() * (operands[0] - 1)) | 0) + 1;
+			performStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'read': {
@@ -431,18 +524,11 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				(Interpreters are asked to halt with a suitable error message if the text or parse buffers have
 				length of less than 3 or 6 bytes, respectively: this sometimes occurs due to a previous array being
 				overrun, causing bugs which are very difficult to find.) */
-			const maxInputLength = state.memory[operands[0]] - (getVersion(state) <= 4 ? 1 : 0);
-			input = input.toLowerCase().replace(/\n.*/g, '').slice(0, maxInputLength);
-
-			let address = operands[0] + (getVersion(state) <= 4 ? 1 : 2);
-			for (let i = 0; i < input.length; ++i) {
-				state.memory[address++] = input.charCodeAt(i);
+			input = input.toLowerCase().replace(/\n.*/g, '');
+			parseText(state, input, operands[0], operands[1]);
+			if (getVersion(state) >= 5) {
+				performStore(state, instruction.resultVariable, 10); // assume RETURN terminated this line
 			}
-			if (getVersion(state) <= 4) {
-				state.memory[address++] = 0;
-			}
-
-			throw new Error('UNIMPLEMENTED');
 		} break;
 
 		case 'ret': {
@@ -477,7 +563,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* set_attr
 				2OP:11 B set_attr object attribute
 				Make object have the attribute numbered attribute. */
-			setObjectAttribute(state, operands[0], operands[1]);
+			setObjectAttribute(state, operands[0], operands[1], true);
 		} break;
 
 		case 'store': {
@@ -493,7 +579,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				VAR:226 2 storeb array byte-index value
 				array->byte-index = value, i.e. stores the given value in the byte at address array+byte-index
 				(which must lie in dynamic memory). (See loadb.) */
-			const address = operands[0] + 2*operands[1];
+			const address = operands[0] + operands[1];
 			state.memory[address] = operands[2];
 		} break;
 
@@ -518,7 +604,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* test
 				2OP:7 7 test bitmap flags ?(label)
 				Jump if all of the flags in bitmap are set (i.e. if bitmap & flags == flags). */
-			const test = operands[0] & operands[1] === operands[1];
+			const test = (operands[0] & operands[1]) === operands[1];
 			if (test === instruction.branchIf) {
 				performBranch(state, instruction.branchOffset);
 			}

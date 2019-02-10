@@ -11,7 +11,7 @@ module.exports = function run(state, output, input) {
 		throw new Error(`invalid instruction at 0x${state.pc.toString(16)}`);
 	}
 
-	debuglog(instructionToString(instruction));
+	// debuglog(instructionToString(instruction));
 
 	if (instruction.opcode.input && input == null) {
 		return true;
@@ -24,7 +24,18 @@ module.exports = function run(state, output, input) {
 
 	state.pc = instruction.nextAddress;
 
-	return executeInstruction(state, instruction, operands, output, input);
+	const result = executeInstruction(state, instruction, operands, output, input);
+
+// 	if (state.pc === 0x590c || state.pc === 0x5910) {
+// 		console.log('[2551] ' + state.memory.slice(0x2551, 0x2561).map(x => x.toString(16).padStart(2, '0')).join(' '));
+// 		console.log('[2641] ' + state.memory.slice(0x2641, 0x2651).map(x => x.toString(16).padStart(2, '0')).join(' '));
+// 	}
+//
+// 	if (state.pc === 0x5910) {
+// 		throw new Error("STOP")
+// 	}
+
+	return result;
 }
 
 function instructionToString(instruction) {

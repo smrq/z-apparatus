@@ -37,7 +37,8 @@ async function main(state) {
 		input = null;
 		if (yielded) {
 			// TODO add status line
-			process.stdout.write(output.text);
+			console.log(output.text);
+			output.text = '';
 			input = await new Promise(resolve => { rl.question('', resolve); });
 		}
 	}

@@ -1,15 +1,16 @@
 const { getVersion, getDictionaryAddress } = require('./header');
 const { read16 } = require('./rw16');
+const decodeText = require('./decodeText');
 
 module.exports = function decodeDictionaryTable(state) {
-	let address = header.dictionaryAddress;
+	let address = getDictionaryAddress(state);
 
 	const dictionary = {};
 
 	const wordSeparatorCount = state.memory[address++];
-	const wordSeparators = [];
+	let wordSeparators = '';
 	for (let i = 0; i < wordSeparatorCount; ++i) {
-		wordSeparators.push(state.memory[address++]);
+		wordSeparators += String.fromCharCode(state.memory[address++]);
 	}
 
 	const entryLength = state.memory[address++];
@@ -17,19 +18,20 @@ module.exports = function decodeDictionaryTable(state) {
 	address += 2;
 
 	const entries = [];
+	const textLength = getVersion(state) <= 3 ? 6 : 9;
 	const encodedTextLength = getVersion(state) <= 3 ? 4 : 6;
 	const dataLength = entryLength - encodedTextLength;
 	for (let i = 0; i < entryCount; ++i) {
-		const encodedText = state.memory.slice(address, encodedTextLength);
-		address += encodedTextLength;
-		const data = state.memory.slice(address, dataLength);
-		address += dataLength;
-		entries.push({ encodedText, data });
+		const encodedText = state.memory.slice(address, address + encodedTextLength);
+		const data = state.memory.slice(address + encodedTextLength, address + encodedTextLength + dataLength);
+		entries.push({ number: i, encodedText, data, address });
+		address += encodedTextLength + dataLength;
 	}
 
 	return {
 		wordSeparators,
 		entries,
+		textLength,
 		encodedTextLength,
 		dataLength
 	};
