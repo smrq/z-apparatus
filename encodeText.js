@@ -12,6 +12,8 @@ module.exports = function encodeText(state, text) {
 		let index;
 		if (char === ' ') {
 			zchars.push(0);
+		} else if (char === '\0') {
+			zchars.push(5);
 		} else if ((index = alphabets[0].indexOf(char)) > -1) {
 			zchars.push(6 + index);
 		} else if ((index = alphabets[1].indexOf(char)) > -1) {
@@ -21,7 +23,8 @@ module.exports = function encodeText(state, text) {
 			zchars.push(version <= 2 ? 3 : 5);
 			zchars.push(6 + index);
 		} else {
-			throw new Error('could not text encode character ' + char);
+			// could not encode character
+			return null;
 		}
 	});
 

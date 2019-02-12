@@ -26,18 +26,20 @@ module.exports = function parseText(state, text, textBufferAddress, parseTableAd
 		let words = text.split(separatorRegex);
 		words = words.map(text => {
 			const result = {
-				text: text.slice(0, dictionary.textLength),
+				text: text.slice(0, dictionary.textLength).padEnd(dictionary.textLength, '\0'),
 				length: text.length,
 				position
 			};
 			position += text.length;
 			return result;
 		});
-		words = words.filter(word => word.text != '' && word.text != ' ');
+		words = words.filter(word => /[^\0 ]/.test(word.text));
 		words.forEach(word => {
 			const encodedText = encodeText(state, word.text);
-			word.entry = dictionary.entries.find(entry =>
-				entry.encodedText.every((c, i) => c === encodedText[i]));
+			if (encodedText) {
+				word.entry = dictionary.entries.find(entry =>
+					entry.encodedText.every((c, i) => c === encodedText[i]));
+			}
 		});
 
 		address = parseTableAddress;
@@ -51,6 +53,7 @@ module.exports = function parseText(state, text, textBufferAddress, parseTableAd
 				address += 2;
 				// state.memory[address++] = word.entry.address & 0xFF;
 			} else {
+				state.memory[address++] = 0;
 				state.memory[address++] = 0;
 			}
 

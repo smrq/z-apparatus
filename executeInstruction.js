@@ -11,19 +11,24 @@ const {
 	RELATION_PARENT,
 	RELATION_SIBLING,
 	RELATION_CHILD,
-	getDefaultProperty,
+	getDefaultPropertyData,
 	getObjectAttribute,
 	setObjectAttribute,
 	getObjectRelation,
 	setObjectRelation,
-	getObjectPropertiesAddress
+	moveObject,
+	getObjectName,
+	getObjectPropertyData,
+	getObjectPropertyDataAddress,
+	getObjectPropertyDataLengthFromDataAddress,
+	getObjectFirstPropertyNumber,
+	getObjectNextPropertyNumber,
+	setObjectPropertyData
 } = require('./object');
-const decodePropertyTable = require('./decodePropertyTable');
-const decodeProperty = require('./decodeProperty');
 const parseText = require('./parseText');
 const decodeText = require('./decodeText');
 
-module.exports = function executeInstruction(state, instruction, operands, output, input) {
+module.exports = function executeInstruction(state, instruction, operands, output, input, random) {
 	const op = instruction.opcode.op;
 	switch (op) {
 		case 'add': {
@@ -131,6 +136,19 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			}
 		} break;
 
+		case 'get_next_prop': {
+			/* get_next_prop
+				2OP:19 13 get_next_prop object property -> (result)
+				Gives the number of the next property provided by the quoted object. This may be zero, indicating
+				the end of the property list; if called with zero, it gives the first property number present. It is
+				illegal to try to find the next property of a property which does not exist, and an interpreter
+				should halt with an error message (if it can efficiently check this condition). */
+			const value = (operands[1] === 0) ?
+				getObjectFirstPropertyNumber(state, operands[0]) :
+				getObjectNextPropertyNumber(state, operands[0], operands[1]);
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
 		case 'get_parent': {
 			/* get_parent
 				1OP:131 3 get_parent object -> (result)
@@ -146,16 +164,13 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the
 				property are taken as a word value. It is illegal for the opcode to be used if the property has
 				length greater than 2, and the result is unspecified. */
-			const propertyTableAddress = getObjectPropertiesAddress(state, operands[0]);
-			const propertyTable = decodePropertyTable(state, propertyTableAddress);
-			const property = propertyTable.properties.find(entry => entry.number === operands[1]);
-			if (property) {
-				performStore(state, instruction.resultVariable,
-					property.data.length === 1 ?
-						property.data[0] :
-						read16(property.data, 0));
+			const data = getObjectPropertyData(state, operands[0], operands[1]);
+			if (data) {
+				performStore(state, instruction.resultVariable, data.length === 1 ?
+					data[0] :
+					read16(data, 0));
 			} else {
-				performStore(state, instruction.resultVariable, getDefaultProperty(state, operands[1]));
+				performStore(state, instruction.resultVariable, getDefaultPropertyData(state, operands[1]));
 			}
 		} break;
 
@@ -164,19 +179,21 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:18 12 get_prop_addr object property -> (result)
 				Get the byte address (in dynamic memory) of the property data for the given object's property.
 				This must return 0 if the object hasn't got the property. */
-			const propertyTableAddress = getObjectPropertiesAddress(state, operands[0]);
-			const propertyTable = decodePropertyTable(state, propertyTableAddress);
-			const property = propertyTable.properties.find(entry => entry.number === operands[1]);
-			if (property) {
-				performStore(state, instruction.resultVariable, property.address);
-			} else {
-				performStore(state, instruction.resultVariable, 0);
-			}
+			const address = getObjectPropertyDataAddress(state, operands[0], operands[1]);
+			performStore(state, instruction.resultVariable, address);
 		} break;
 
 		case 'get_prop_len': {
-			const property = decodeProperty(state, operands[0]);
-			performStore(state, instruction.resultVariable, property.dataLength);
+			/* get_prop_len
+				1OP:132 4 get_prop_len property-address -> (result)
+				Get length of property data (in bytes) for the given object's property. It is illegal to try to find the
+				property length of a property which does not exist for the given object, and an interpreter should
+				halt with an error message (if it can efficiently check this condition). */
+			const length = getObjectPropertyDataLengthFromDataAddress(state, operands[0]);
+			if (!length) {
+				throw new Error(`object ${objectId} does not have property ${propertyId}`);
+			}
+			performStore(state, instruction.resultVariable, length);
 		} break;
 
 		case 'get_sibling': {
@@ -227,27 +244,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				the child of D is O, and the sibling of O is whatever was previously the child of D.) All children
 				of O move with it. (Initially O can be at any point in the object tree; it may legally have parent
 				zero.) */
-			const [obj, dest] = operands;
-			const objParent = getObjectRelation(state, obj, RELATION_PARENT);
-			const objSibling = getObjectRelation(state, obj, RELATION_SIBLING);
-			const destChild = getObjectRelation(state, dest, RELATION_CHILD);
-
-			if (objParent !== 0) {
-				let node = getObjectRelation(state, objParent, RELATION_CHILD);
-				if (node === obj) {
-					setObjectRelation(state, objParent, RELATION_CHILD, objSibling);
-				} else {
-					let nodeSibling;
-					while (nodeSibling !== obj) {
-						node = nodeSibling;
-						nodeSibling = getObjectRelation(state, node, RELATION_SIBLING);
-					}
-					setObjectRelation(state, node, RELATION_SIBLING, objSibling);
-				}
-			}
-			setObjectRelation(state, dest, RELATION_CHILD, obj);
-			setObjectRelation(state, obj, RELATION_PARENT, dest);
-			setObjectRelation(state, obj, RELATION_SIBLING, destChild);
+			moveObject(state, operands[0], operands[1]);
 		} break;
 
 		case 'je': {
@@ -311,6 +308,15 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			if (test === instruction.branchIf) {
 				performBranch(state, instruction.branchOffset);
 			}
+		} break;
+
+		case 'load': {
+			/* load
+				1OP:142 E load (variable) -> (result)
+				The value of the variable referred to by the operand is stored in the result. (Inform doesn't use
+				this; see the notes to S 14.) */
+			const value = performDereference(state, decodeVariable(operands[0]));
+			performStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'loadb': {
@@ -382,9 +388,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				1OP:138 A print_obj object
 				Print short name of object (the Z-encoded string in the object header, not a property). If the object
 				number is invalid, the interpreter should halt with a suitable error message. */
-			const propertyTableAddress = getObjectPropertiesAddress(state, operands[0]);
-			const propertyTable = decodePropertyTable(state, propertyTableAddress);
-			output.text += propertyTable.shortName;
+			output.text += getObjectName(state, operands[0]);
 		} break;
 
 		case 'print_paddr': {
@@ -433,19 +437,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				then the interpreter should store only the least significant byte of the value. (For instance, storing
 				-1 into a 1-byte property results in the property value 255.) As with get_prop the property length
 				must not be more than 2: if it is, the behaviour of the opcode is undefined. */
-			const propertyTableAddress = getObjectPropertiesAddress(state, operands[0]);
-			const propertyTable = decodePropertyTable(state, propertyTableAddress);
-			const property = propertyTable.properties.find(property => property.number === operands[1]);
-			if (!property) {
-				throw new Error(`property ${operands[1]} does not exist on object ${operands[0]}`);
-			}
-			if (property.length === 1) {
-				property.data[0] = operands[2] & 0xFF;
-			} else {
-				// NOTE: if property length is more than 2, behavior is undefined.
-				// Here we just leave the extra data without overwriting it.
-				write16(property.data, 0, operands[2]);
-			}
+			setObjectPropertyData(state, operands[0], operands[1], operands[2]);
 		} break;
 
 		case 'random': {
@@ -458,8 +450,12 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				(e.g. by using the time in milliseconds).
 				(Some version 3 games, such as 'Enchanter' release 29, had a debugging verb #random such that
 				typing, say, #random 14 caused a call of random with -14.) */
-			const value = ((Math.random() * (operands[0] - 1)) | 0) + 1;
-			performStore(state, instruction.resultVariable, value);
+			if (operands[0] > 0) {
+				const value = random(operands[0]);
+				performStore(state, instruction.resultVariable, value);
+			} else {
+				// TODO seed rng
+			}
 		} break;
 
 		case 'read': {
@@ -529,6 +525,14 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			if (getVersion(state) >= 5) {
 				performStore(state, instruction.resultVariable, 10); // assume RETURN terminated this line
 			}
+		} break;
+
+		case 'remove_obj': {
+			/* remove_obj
+				1OP:137 9 remove_obj object
+				Detach the object from its parent, so that it no longer has any parent. (Its children remain in its
+				possession.) */
+			moveObject(state, operands[0], 0);
 		} break;
 
 		case 'ret': {

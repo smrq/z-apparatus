@@ -49,7 +49,7 @@ const table = [
 	{ code: 0x00, operandCount: '0OP', op: 'rtrue' },
 	{ code: 0x01, operandCount: '0OP', op: 'rfalse' },
 	{ code: 0x02, operandCount: '0OP', op: 'print', text: true },
-	{ code: 0x03, operandCount: '0OP', op: 'print_ret' },
+	{ code: 0x03, operandCount: '0OP', op: 'print_ret', text: true },
 	{ code: 0x04, operandCount: '0OP', op: 'nop' },
 	{ code: 0x05, operandCount: '0OP', op: 'save', maxVersion: 3, branch: true },
 	{ code: 0x05, operandCount: '0OP', op: 'save', minVersion: 4, maxVersion: 4 },

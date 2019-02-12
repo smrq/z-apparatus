@@ -3,12 +3,29 @@ const readline = require('readline');
 const getOpcodeTable = require('./getOpcodeTable');
 const run = require('./run');
 
-const rl = readline.createInterface({
-	input: process.stdin,
-	output: process.stdout
-});
-
 const state = init(process.argv[2] || './stories/zork1.z3');
+
+let random;
+if (process.argv[3]) {
+	const randomNumbers = Array.from(fs.readFileSync(process.argv[3] || './random.txt'));
+	random = function random(max) {
+		if (randomNumbers.length) {
+			const value = randomNumbers.shift() + 1;
+			console.log(`RANDOM ${max} -> ${value}`);
+			if (value > max) {
+				throw new Error(`random value ${value} out of range ${max}`);
+			}
+			return value;
+		} else {
+			console.log(`RANDOM ${max}`);
+			throw new Error('ran out of randomness');
+		}
+	}
+} else {
+	random = function random(max) {
+		return ((Math.random()*(max-1)) | 0) + 1;
+	}
+}
 
 main(state)
 	.then(console.log)
@@ -18,7 +35,7 @@ main(state)
 	});
 
 function init(filename) {
-	const file = fs.readFileSync(process.argv[2] || './stories/zork1.z3');
+	const file = fs.readFileSync(filename);
 	const memory = Array.from(file);
 
 	return {
@@ -29,17 +46,35 @@ function init(filename) {
 	};
 }
 
+const bufferedInput = [];
+const rl = readline.createInterface({
+	input: process.stdin
+});
+rl.on('line', line => bufferedInput.push(line));
+
 async function main(state) {
 	const output = { text: '' };
 	let input;
 	for (;;) {
-		const yielded = run(state, output, input);
+		const runState = run(state, output, input, random);
 		input = null;
-		if (yielded) {
+		if (runState === 'yield') {
 			// TODO add status line
-			console.log(output.text);
+			await new Promise(resolve => process.stdout.write(output.text, resolve));
 			output.text = '';
-			input = await new Promise(resolve => { rl.question('', resolve); });
+
+			if (!bufferedInput.length) {
+				await new Promise(resolve => rl.on('line', resolve));
+			}
+
+			input = bufferedInput.shift();
+			if (!process.stdin.isTTY) {
+				process.stdout.write(input);
+				process.stdout.write('\n');
+			}
+		} else if (runState === 'quit') {
+			await new Promise(resolve => process.stdout.write(output.text, resolve));
+			process.exit(0);
 		}
 	}
 }

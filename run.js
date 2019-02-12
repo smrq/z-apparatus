@@ -1,30 +1,52 @@
 const decodeInstruction = require('./decodeInstruction');
 const executeInstruction = require('./executeInstruction');
 const performDereference = require('./performDereference');
+const { s16 } = require('./rw16');
 
-let DEBUG = true;
-const debuglog = function() { if (DEBUG) { console.log.apply(console, arguments); }}
-
-module.exports = function run(state, output, input) {
+module.exports = function run(state, output, input, random) {
 	const instruction = decodeInstruction(state, state.pc);
 	if (!instruction.opcode) {
 		throw new Error(`invalid instruction at 0x${state.pc.toString(16)}`);
 	}
 
-	// debuglog(instructionToString(instruction));
+	// console.error(instructionToString(instruction));
 
 	if (instruction.opcode.input && input == null) {
-		return true;
+		return 'yield';
+	}
+
+	if (instruction.opcode.op === 'quit') {
+		return 'quit';
 	}
 
 	const operands = instruction.operands.map(op => performDereference(state, op));
 
-	// debuglog('        [' + operands.map(op => op.toString(16).padStart(4, 0)).join(' ') + ']');
-	// debuglog(state.stack);
+	// console.error('        [' + operands.map(op => op && op.toString(16).padStart(4, 0)).join(' ') + ']');
+	// console.error(state.stack);
+
+	// function debugOperand(operand) {
+	// 	if (typeof operand === 'number') {
+	// 		return operand.toString(16).padStart(4, '0');
+	// 	} else {
+	// 		return operand;
+	// 	}
+	// }
+
+	// console.error('<' +
+	// 	instruction.address.toString(16).padStart(6, '0') + ' ' +
+	// 	instruction.opcodeByte.toString(16).padStart(2, '0') + ' ' +
+	// 	operands.length + ' ' +
+	// 	debugOperand(operands.length > 0 ? operands[0] : 0) + ' ' +
+	// 	debugOperand(operands.length > 1 ? operands[1] : 0) + ' ' +
+	// 	debugOperand(operands.length > 2 ? operands[2] : 0) + ' ' +
+	// 	debugOperand(operands.length > 3 ? operands[3] : 0) + '> | ' +
+	// 	(state.stack[state.stack.length-1].stack.slice(-1)[0] || 0).toString(16).padStart(4, '0') + ' | ' +
+	// 	(state.stack[state.stack.length-1].localVariables ? state.stack[state.stack.length-1].localVariables.map(l => l.toString(16).padStart(4, '0') + ' ').join('') : '')
+	// );
 
 	state.pc = instruction.nextAddress;
 
-	const result = executeInstruction(state, instruction, operands, output, input);
+	const result = executeInstruction(state, instruction, operands, output, input, random);
 
 // 	if (state.pc === 0x590c || state.pc === 0x5910) {
 // 		console.log('[2551] ' + state.memory.slice(0x2551, 0x2561).map(x => x.toString(16).padStart(2, '0')).join(' '));

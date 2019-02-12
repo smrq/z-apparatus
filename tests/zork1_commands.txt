@@ -1,0 +1,306 @@
+n
+e
+e
+n
+w
+u
+get egg
+d
+s
+e
+open window
+in
+open sack
+get garlic
+w
+get lamp and sword
+e
+u
+light lamp
+get rope and knife
+d
+w
+move rug
+open trapdoor
+d
+n
+kill troll with sword
+drop sword
+s
+s
+e
+get painting
+w
+n
+n
+w
+w
+w
+u
+get bag
+sw
+e
+s
+se
+ulysses
+u
+give egg to thief
+kill thief with knife
+kill thief with knife
+drop knife
+get chalice and egg
+d
+e
+e
+open case
+put painting and chalice and coins in case
+turn off lamp
+e
+e
+e
+n
+w
+wind up canary
+get bauble
+get canary
+s
+e
+in
+w
+put egg and bauble and canary in case
+open trapdoor
+d
+light lamp
+n
+e
+e
+se
+e
+tie rope to railing
+d
+get torch
+extinguish lamp
+s
+drop all but torch
+e
+open coffin
+get coffin and sceptre
+w
+temple
+d
+e
+e
+put coffin in case
+e
+e
+e
+e
+d
+d
+n
+wave sceptre
+get pot
+sw
+u
+u
+w
+n
+w
+in
+w
+put pot and sceptre in case
+d
+n
+e
+e
+e
+echo
+get bar
+u
+e
+n
+get matchbook
+n
+get wrench and screwdriver
+press yellow
+s
+s
+turn bolt with wrench
+drop wrench
+w
+wait
+again
+n
+get trunk
+n
+get pump
+s
+s
+se
+d
+w
+se
+e
+d
+s
+temple
+d
+e
+e
+put bar and trunk in case
+w
+w
+u
+temple
+get all
+s
+get book and candles
+blow out candles
+d
+d
+ring bell
+get candles
+light match
+light candles with match
+read prayer
+drop book and matchbook
+s
+get skull
+n
+u
+n
+n
+n
+e
+u
+e
+d
+inflate boat with pump
+drop pump
+get in boat
+launch it
+wait
+again
+again
+again
+get buoy
+e
+get out of boat
+drop buoy
+open it
+get emerald and shovel
+ne
+dig in sand with shovel
+again
+again
+again
+drop shovel
+get scarab
+sw
+s
+s
+w
+w
+sw
+u
+u
+w
+n
+w
+in
+w
+put skull and emerald and scarab in case
+d
+n
+e
+n
+ne
+n
+n
+n
+get trident
+u
+n
+n
+w
+n
+w
+get garlic
+n
+e
+put torch and screwdriver in basket
+n
+light lamp
+d
+get bracelet
+e
+ne
+se
+sw
+d
+d
+s
+get coal
+n
+u
+u
+n
+e
+s
+n
+u
+s
+put coal in basket
+lower basket
+n
+d
+e
+ne
+se
+sw
+d
+d
+w
+drop all
+w
+get coal and torch and screwdriver
+s
+open lid
+put coal in machine
+close lid
+turn switch with screwdriver
+open lid
+get diamond
+drop screwdriver
+n
+put torch and diamond in basket
+e
+get all but timber and sack
+e
+u
+u
+n
+e
+s
+n
+u
+s
+raise basket
+inventory
+get diamond and torch
+w
+drop garlic
+get figurine
+s
+e
+s
+d
+u
+put figurine and trident and bracelet and diamond and torch in case
+get map
+e
+e
+s
+w
+sw
+enter barrow

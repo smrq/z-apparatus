@@ -108,5 +108,6 @@ module.exports = function decodeInstruction(state, address) {
 	}
 
 	result.nextAddress = address;
+	result.opcodeByte = opcodeByte; // for debugging purposes only
 	return result;
 }

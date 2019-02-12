@@ -1,5 +1,6 @@
 node_modules
 z-spec10.pdf
 ztools731
-zorkmid
+zorkmid/*
+!zorkmid/zorkmid.c
 stories
