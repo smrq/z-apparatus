@@ -1,11 +1,3 @@
-function s8(value) {
-	return new Int8Array([value])[0];
-}
-
-function s16(value) {
-	return new Int16Array([value])[0];
-}
-
 function read16(buffer, address) {
 	return buffer[address] << 8 | buffer[address + 1];
 }
@@ -16,8 +8,6 @@ function write16(buffer, address, value) {
 }
 
 module.exports = {
-	s8,
-	s16,
 	read16,
 	write16
 };

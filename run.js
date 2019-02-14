@@ -1,7 +1,6 @@
 const decodeInstruction = require('./decodeInstruction');
 const executeInstruction = require('./executeInstruction');
 const { variableLoad } = require('./variables');
-const { s16 } = require('./rw16');
 
 module.exports = function run(state, output, input, random) {
 	const instruction = decodeInstruction(state, state.pc);
@@ -62,40 +61,40 @@ module.exports = function run(state, output, input, random) {
 	return result;
 }
 
-function instructionToString(instruction) {
-	let result = `0x${instruction.address.toString(16).padStart(4, '0')}: <`;
-	result += instruction.raw.map(byte => byte.toString(16).padStart(2, '0')).join(' ') + '>  ';
-	if (!instruction.opcode) {
-		result += '[invalid opcode]';
-	} else {
-		if (instruction.opcode.store) {
-			result += `${operandToString({ type: 'variable', value: instruction.resultVariable })} = `;
-		}
-		result += instruction.opcode.op + ' ';
-		result += instruction.operands.map(operandToString).join(' ');
-		if (instruction.opcode.text) {
-			result += ` "${instruction.text}"`;
-		}
-		if (instruction.opcode.branch) {
-			if (instruction.branchOffset <= 1) {
-				result += ` ${instruction.branchIf}=>return ${instruction.branchOffset}`;
-			} else {
-				result += ` ${instruction.branchIf}=>0x${(instruction.nextAddress + instruction.branchOffset - 2).toString(16).padStart(4, 0)}`;
-			}
-		}
-	}
-
-	return result;
-}
-
-function operandToString(operand) {
-	if (operand.type === 'constant') {
-		return `0x${operand.value.toString(16).padStart(4, 0)}`;
-	} else if (operand.value === 0) {
-		return '(stack)';
-	} else if (operand.value <= 0x0F) {
-		return `L${(operand.value - 1).toString(16)}`;
-	} else {
-		return `G${(operand.value - 0x0F).toString(16)}`;
-	}
-}
+// function instructionToString(instruction) {
+// 	let result = `0x${instruction.address.toString(16).padStart(4, '0')}: <`;
+// 	result += instruction.raw.map(byte => byte.toString(16).padStart(2, '0')).join(' ') + '>  ';
+// 	if (!instruction.opcode) {
+// 		result += '[invalid opcode]';
+// 	} else {
+// 		if (instruction.opcode.store) {
+// 			result += `${operandToString({ type: 'variable', value: instruction.resultVariable })} = `;
+// 		}
+// 		result += instruction.opcode.op + ' ';
+// 		result += instruction.operands.map(operandToString).join(' ');
+// 		if (instruction.opcode.text) {
+// 			result += ` "${instruction.text}"`;
+// 		}
+// 		if (instruction.opcode.branch) {
+// 			if (instruction.branchOffset <= 1) {
+// 				result += ` ${instruction.branchIf}=>return ${instruction.branchOffset}`;
+// 			} else {
+// 				result += ` ${instruction.branchIf}=>0x${(instruction.nextAddress + instruction.branchOffset - 2).toString(16).padStart(4, 0)}`;
+// 			}
+// 		}
+// 	}
+//
+// 	return result;
+// }
+//
+// function operandToString(operand) {
+// 	if (operand.type === 'constant') {
+// 		return `0x${operand.value.toString(16).padStart(4, 0)}`;
+// 	} else if (operand.value === 0) {
+// 		return '(stack)';
+// 	} else if (operand.value <= 0x0F) {
+// 		return `L${(operand.value - 1).toString(16)}`;
+// 	} else {
+// 		return `G${(operand.value - 0x0F).toString(16)}`;
+// 	}
+// }
