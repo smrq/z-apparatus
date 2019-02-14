@@ -1,4 +1,3 @@
-const decodeVariable = require('./decodeVariable');
 const decodeText = require('./decodeText');
 const { getVersion } = require('./header');
 const lookupOpcode = require('./lookupOpcode');
@@ -73,16 +72,16 @@ module.exports = function decodeInstruction(state, address) {
 		if (type === TYPE_LARGE_CONSTANT) {
 			const value = read16(state.memory, address);
 			address += 2;
-			return { type: 'largeconstant', value };
+			return { type: 'constant', value };
 		} else if (type === TYPE_SMALL_CONSTANT) {
-			return { type: 'smallconstant', value: state.memory[address++] };
+			return { type: 'constant', value: state.memory[address++] };
 		} else {
-			return decodeVariable(state.memory[address++]);
+			return { type: 'variable', value: state.memory[address++] };
 		}
 	});
 
 	if (result.opcode && result.opcode.store) {
-		result.resultVariable = decodeVariable(state.memory[address++]);
+		result.resultVariable = state.memory[address++];
 	}
 
 	if (result.opcode && result.opcode.branch) {

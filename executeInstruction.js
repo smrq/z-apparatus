@@ -1,9 +1,7 @@
-const decodeVariable = require('./decodeVariable');
 const performBranch = require('./performBranch');
 const performCall = require('./performCall');
-const performStore = require('./performStore');
 const performReturn = require('./performReturn');
-const performDereference = require('./performDereference');
+const { variableLoad, variableStore } = require('./variables');
 const unpackAddress = require('./unpackAddress');
 const { getVersion } = require('./header');
 const { read16, write16 } = require('./rw16');
@@ -36,7 +34,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:20 14 add a b -> (result)
 				Signed 16-bit addition. */
 			const value = (operands[0] + operands[1]) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'and': {
@@ -44,7 +42,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:9 9 and a b -> (result)
 				Bitwise AND. */
 			const value = operands[0] & operands[1];
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'art_shift': {
@@ -60,7 +58,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			} else {
 				value = (number << places) & 0xFFFF;
 			}
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'call_1n': {
@@ -113,7 +111,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				See call. */
 			const [packedAddress, ...args] = operands;
 			if (packedAddress === 0) {
-				performStore(state, instruction.resultVariable, 0);
+				variableStore(state, instruction.resultVariable, 0);
 			} else {
 				performCall(state, op, packedAddress, args, instruction.resultVariable);
 			}
@@ -143,20 +141,18 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* dec
 				1OP:134 6 dec (variable)
 				Decrement variable by 1. This is signed, so 0 decrements to -1. */
-			const variable = decodeVariable(operands[0]);
-			let value = performDereference(state, variable);
+			let value = variableLoad(state, operands[0]);
 			value = (value - 1) & 0xFFFF;
-			performStore(state, variable, value);
+			variableStore(state, operands[0], value);
 		} break;
 
 		case 'dec_chk': {
 			/* dec_chk
 				2OP:4 4 dec_chk (variable) value ?(label)
 				Decrement variable, and branch if it is now less than the given value. */
-			const variable = decodeVariable(operands[0]);
-			let value = performDereference(state, variable);
+			let value = variableLoad(state, operands[0]);
 			value = (value - 1) & 0xFFFF;
-			performStore(state, variable, value);
+			variableStore(state, operands[0], value);
 
 			let given = operands[1];
 			[value, given] = new Int16Array([value, given]);
@@ -173,7 +169,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Signed 16-bit division. Division by zero should halt the interpreter with a suitable error message. */
 			const [a, b] = new Int16Array(operands);
 			const value = (a / b) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'get_child': {
@@ -182,7 +178,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Get first object contained in given object, branching if this exists, i.e. is not nothing (i.e., is not
 				0). */
 			const child = getObjectRelation(state, operands[0], RELATION_CHILD);
-			performStore(state, instruction.resultVariable, child);
+			variableStore(state, instruction.resultVariable, child);
 
 			const test = child !== 0;
 			if (test === instruction.branchIf) {
@@ -200,7 +196,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			const value = (operands[1] === 0) ?
 				getObjectFirstPropertyNumber(state, operands[0]) :
 				getObjectNextPropertyNumber(state, operands[0], operands[1]);
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'get_parent': {
@@ -208,7 +204,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				1OP:131 3 get_parent object -> (result)
 				Get parent object (note that this has no "branch if exists" clause). */
 			const parent = getObjectRelation(state, operands[0], RELATION_PARENT);
-			performStore(state, instruction.resultVariable, parent);
+			variableStore(state, instruction.resultVariable, parent);
 		} break;
 
 		case 'get_prop': {
@@ -220,11 +216,11 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				length greater than 2, and the result is unspecified. */
 			const data = getObjectPropertyData(state, operands[0], operands[1]);
 			if (data) {
-				performStore(state, instruction.resultVariable, data.length === 1 ?
+				variableStore(state, instruction.resultVariable, data.length === 1 ?
 					data[0] :
 					read16(data, 0));
 			} else {
-				performStore(state, instruction.resultVariable, getDefaultPropertyData(state, operands[1]));
+				variableStore(state, instruction.resultVariable, getDefaultPropertyData(state, operands[1]));
 			}
 		} break;
 
@@ -234,7 +230,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Get the byte address (in dynamic memory) of the property data for the given object's property.
 				This must return 0 if the object hasn't got the property. */
 			const address = getObjectPropertyDataAddress(state, operands[0], operands[1]);
-			performStore(state, instruction.resultVariable, address);
+			variableStore(state, instruction.resultVariable, address);
 		} break;
 
 		case 'get_prop_len': {
@@ -247,7 +243,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			if (!length) {
 				throw new Error(`object ${objectId} does not have property ${propertyId}`);
 			}
-			performStore(state, instruction.resultVariable, length);
+			variableStore(state, instruction.resultVariable, length);
 		} break;
 
 		case 'get_sibling': {
@@ -255,7 +251,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				1OP:129 1 get_sibling object -> (result) ?(label)
 				Get next object in tree, branching if this exists, i.e. is not 0. */
 			const sibling = getObjectRelation(state, operands[0], RELATION_SIBLING);
-			performStore(state, instruction.resultVariable, sibling);
+			variableStore(state, instruction.resultVariable, sibling);
 
 			const test = sibling !== 0;
 			if (test === instruction.branchIf) {
@@ -267,20 +263,18 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* inc
 				1OP:133 5 inc (variable)
 				Increment variable by 1. (This is signed, so -1 increments to 0.) */
-			const variable = decodeVariable(operands[0]);
-			let value = performDereference(state, variable);
+			let value = variableLoad(state, operands[0]);
 			value = (value + 1) & 0xFFFF;
-			performStore(state, variable, value);
+			variableStore(state, operands[0], value);
 		} break;
 
 		case 'inc_chk': {
 			/* inc_chk
 				2OP:5 5 inc_chk (variable) value ?(label)
 				Increment variable, and branch if now greater than value. */
-			const variable = decodeVariable(operands[0]);
-			let value = performDereference(state, variable);
+			let value = variableLoad(state, operands[0]);
 			value = (value + 1) & 0xFFFF;
-			performStore(state, variable, value);
+			variableStore(state, operands[0], value);
 
 			let given = operands[1];
 			[value, given] = new Int16Array([value, given]);
@@ -369,8 +363,8 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				1OP:142 E load (variable) -> (result)
 				The value of the variable referred to by the operand is stored in the result. (Inform doesn't use
 				this; see the notes to S 14.) */
-			const value = performDereference(state, decodeVariable(operands[0]));
-			performStore(state, instruction.resultVariable, value);
+			const value = variableLoad(state, operands[0]);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'loadb': {
@@ -379,7 +373,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Stores array->byte-index (i.e., the byte at address array+byte-index, which must lie in static or
 				dynamic memory). */
 			const value = state.memory[(operands[0] + operands[1]) & 0xFFFF];
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'loadw': {
@@ -388,7 +382,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				Stores array-->word-index (i.e., the word at address array+2*word-index, which must lie in
 				static or dynamic memory). */
 			const value = read16(state.memory, (operands[0] + 2*operands[1]) & 0xFFFF);
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'log_shift': {
@@ -405,7 +399,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			} else {
 				value = (number << places) & 0xFFFF;
 			}
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'mod': {
@@ -415,7 +409,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				error message. */
 			const [a, b] = new Int16Array(operands);
 			const value = (a % b) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'mul': {
@@ -423,7 +417,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:22 16 mul a b -> (result)
 				Signed 16-bit multiplication. */
 			const value = (operands[0] * operands[1]) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'new_line': {
@@ -441,7 +435,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				reasonably since it has 1 operand, but in later Versions it was moved into the extended set to
 				make room for call_1n. */
 			const value = ~(operands[0]) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'or': {
@@ -449,7 +443,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:8 8 or a b -> (result)
 				Bitwise OR. */
 			const value = operands[0] | operands[1];
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'print': {
@@ -515,9 +509,8 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				message.) In Version 6, the stack in question may be specified as a user one: otherwise it is the
 				game stack. */
 			const frame = state.stack[state.stack.length - 1];
-			const variable = decodeVariable(operands[0]);
 			const value = frame.stack.pop();
-			performStore(state, variable, value);
+			variableStore(state, operands[0], value);
 		} break;
 
 		case 'push': {
@@ -551,7 +544,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				typing, say, #random 14 caused a call of random with -14.) */
 			if (operands[0] > 0) {
 				const value = random(operands[0]);
-				performStore(state, instruction.resultVariable, value);
+				variableStore(state, instruction.resultVariable, value);
 			} else {
 				// TODO seed rng
 			}
@@ -622,7 +615,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			input = input.toLowerCase().replace(/\n.*/g, '');
 			parseText(state, input, operands[0], operands[1]);
 			if (getVersion(state) >= 5) {
-				performStore(state, instruction.resultVariable, 10); // assume RETURN terminated this line
+				variableStore(state, instruction.resultVariable, 10); // assume RETURN terminated this line
 			}
 		} break;
 
@@ -645,7 +638,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* ret_popped
 				0OP:184 8 ret_popped
 				Pops top of stack and returns that. (This is equivalent to ret sp, but is one byte cheaper.) */
-			performReturn(state, performDereference(state, { type: 'stack' }));
+			performReturn(state, variableLoad(state, 0));
 		} break;
 
 		case 'rfalse': {
@@ -673,7 +666,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				(This call is typically needed once per turn, in order to implement "UNDO", so it needs to be
 				quick.) */
 			// TODO
-			performStore(state, instruction.resultVariable, (-1)&0xFFFF);
+			variableStore(state, instruction.resultVariable, (-1)&0xFFFF);
 		} break;
 
 		case 'set_attr': {
@@ -696,8 +689,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* store
 				2OP:13 D store (variable) value
 				Set the VARiable referenced by the operand to value. */
-			const variable = decodeVariable(operands[0]);
-			performStore(state, variable, operands[1]);
+			variableStore(state, operands[0], operands[1]);
 		} break;
 
 		case 'storeb': {
@@ -723,7 +715,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:21 15 sub a b -> (result)
 				Signed 16-bit subtraction. */
 			const value = (operands[0] - operands[1]) & 0xFFFF;
-			performStore(state, instruction.resultVariable, value);
+			variableStore(state, instruction.resultVariable, value);
 		} break;
 
 		case 'test': {

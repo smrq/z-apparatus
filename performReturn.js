@@ -1,9 +1,9 @@
-const performStore = require('./performStore');
+const { variableStore } = require('./variables');
 
 module.exports = function performReturn(state, value) {
 	const frame = state.stack.pop();
-	if (frame.resultVariable) {
-		performStore(state, frame.resultVariable, value);
+	if (frame.resultVariable != null) {
+		variableStore(state, frame.resultVariable, value);
 	}
 	state.pc = frame.nextAddress;
 }

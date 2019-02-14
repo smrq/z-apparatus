@@ -1,6 +1,6 @@
 const decodeInstruction = require('./decodeInstruction');
 const executeInstruction = require('./executeInstruction');
-const performDereference = require('./performDereference');
+const { variableLoad } = require('./variables');
 const { s16 } = require('./rw16');
 
 module.exports = function run(state, output, input, random) {
@@ -19,7 +19,9 @@ module.exports = function run(state, output, input, random) {
 		return 'quit';
 	}
 
-	const operands = instruction.operands.map(op => performDereference(state, op));
+	const operands = instruction.operands.map(operand => operand.type === 'constant' ?
+			operand.value :
+			variableLoad(state, operand.value));
 
 	// console.error('  (' + operands.map(op => op && op.toString(16).padStart(4, 0)).join(' ') + ')');
 	// console.error(state.stack);
@@ -67,7 +69,7 @@ function instructionToString(instruction) {
 		result += '[invalid opcode]';
 	} else {
 		if (instruction.opcode.store) {
-			result += `${operandToString(instruction.resultVariable)} = `;
+			result += `${operandToString({ type: 'variable', value: instruction.resultVariable })} = `;
 		}
 		result += instruction.opcode.op + ' ';
 		result += instruction.operands.map(operandToString).join(' ');
@@ -87,19 +89,13 @@ function instructionToString(instruction) {
 }
 
 function operandToString(operand) {
-	if (operand.type === 'largeconstant') {
+	if (operand.type === 'constant') {
 		return `0x${operand.value.toString(16).padStart(4, 0)}`;
-	}
-	if (operand.type === 'smallconstant') {
-		return `0x${operand.value.toString(16).padStart(2, 0)}`;
-	}
-	if (operand.type === 'stack') {
+	} else if (operand.value === 0) {
 		return '(stack)';
-	}
-	if (operand.type === 'local') {
-		return `L${operand.index.toString(16)}`;
-	}
-	if (operand.type === 'global') {
-		return `G${operand.index.toString(16)}`;
+	} else if (operand.value <= 0x0F) {
+		return `L${(operand.value - 1).toString(16)}`;
+	} else {
+		return `G${(operand.value - 0x0F).toString(16)}`;
 	}
 }
