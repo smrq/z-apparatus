@@ -63,11 +63,10 @@ const table = [
 	{ code: 0x0B, operandCount: '0OP', op: 'new_line' },
 	{ code: 0x0C, operandCount: '0OP', op: 'show_status', minVersion: 3, maxVersion: 3 },
 	{ code: 0x0D, operandCount: '0OP', op: 'verify', minVersion: 3, branch: true},
-	{ code: 0x0E, operandCount: '0OP', op: '[first byte of extended opcode]', minVersion: 5 },
 	{ code: 0x0F, operandCount: '0OP', op: 'piracy', minVersion: 5, branch: true },
 
 	{ code: 0x00, operandCount: 'VAR', op: 'call', maxVersion: 3, store: true },
-	{ code: 0x00, operandCount: 'VAR', op: 'call_vs', minVersion: 4 },
+	{ code: 0x00, operandCount: 'VAR', op: 'call_vs', minVersion: 4, store: true },
 	{ code: 0x01, operandCount: 'VAR', op: 'storew' },
 	{ code: 0x02, operandCount: 'VAR', op: 'storeb' },
 	{ code: 0x03, operandCount: 'VAR', op: 'put_prop' },

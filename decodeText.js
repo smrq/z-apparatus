@@ -1,5 +1,5 @@
 const getAlphabets = require('./getAlphabets');
-const { getVersion, getAbbreviationsTableAddress } = require('./header');
+const { getVersion, getAbbreviationsTableAddress, getAlphabetTableAddress } = require('./header');
 const { read16 } = require('./rw16');
 
 module.exports = function decodeText(state, address, isAbbreviation = false) {

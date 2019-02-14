@@ -1,6 +1,6 @@
-const decodeRoutine = require('./decodeRoutine');
 const decodeVariable = require('./decodeVariable');
 const performBranch = require('./performBranch');
+const performCall = require('./performCall');
 const performStore = require('./performStore');
 const performReturn = require('./performReturn');
 const performDereference = require('./performDereference');
@@ -47,36 +47,89 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
-		case 'call': {
+		case 'art_shift': {
+			/* art_shift
+				EXT:3 3 5/- art_shift number places -> (result)
+				Does an arithmetic shift of number by the given number of places, shifting left (i.e. increasing)
+				if places is positive, right if negative. In a right shift, the sign bit is preserved as well as being
+				shifted on down. (The alternative behaviour is log_shift.) */
+			const [number, places] = new Int16Array(operands);
+			let value;
+			if (places < 0) {
+				value = (number >> (-places)) & 0xFFFF;
+			} else {
+				value = (number << places) & 0xFFFF;
+			}
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
+		case 'call_1n': {
+			/* call_1n
+				1OP:143 F 5 call_1n routine
+				Executes routine() and throws away result. */
+			performCall(state, op, operands[0], []);
+		} break;
+
+		case 'call_1s': {
+			/* call_1s
+				1OP:136 8 4 call_1s routine -> (result)
+				Stores routine(). */
+			performCall(state, op, operands[0], [], instruction.resultVariable);
+		} break;
+
+		case 'call_2n': {
+			/* call_2n
+				2OP:26 1A 5 call_2n routine arg1
+				Executes routine(arg1) and throws away result. */
+			performCall(state, op, operands[0], [operands[1]]);
+		} break;
+
+		case 'call_2s': {
+			/* call_2s
+				2OP:25 19 4 call_2s routine arg1 -> (result)
+				Stores routine(arg1). */
+			performCall(state, op, operands[0], [operands[1]], instruction.resultVariable);
+		} break;
+
+		case 'call_vn': {
+			/* call_vn
+				VAR:249 19 5 call_vn routine ...up to 3 args...
+				Like call, but throws away result. */
+			const [packedAddress, ...args] = operands;
+			if (packedAddress !== 0) {
+				performCall(state, op, packedAddress, args);
+			}
+		} break;
+
+		case 'call':
+		case 'call_vs': {
 			/* call
 				VAR:224 0 1 call routine ...up to 3 args... -> (result)
 				The only call instruction in Version 3, Inform reads this as call_vs in higher versions: it calls the
 				routine with 0, 1, 2 or 3 arguments as supplied and stores the resulting return value. (When the
 				address 0 is called as a routine, nothing happens and the return value is false.) */
+			/* call_vs
+				VAR:224 0 4 call_vs routine ...up to 3 args... -> (result)
+				See call. */
 			const [packedAddress, ...args] = operands;
-
 			if (packedAddress === 0) {
 				performStore(state, instruction.resultVariable, 0);
 			} else {
-				const address = unpackAddress(state, op, packedAddress);
-				const { localVariables, firstInstructionAddress } = decodeRoutine(state, address);
-
-				args.forEach((arg, i) => {
-					if (localVariables.length > i) {
-						localVariables[i] = args[i];
-					}
-				});
-
-				const stackFrame = {
-					stack: [],
-					localVariables,
-					resultVariable: instruction.resultVariable,
-					nextAddress: state.pc
-				};
-				state.stack.push(stackFrame);
-				state.pc = firstInstructionAddress;
+				performCall(state, op, packedAddress, args, instruction.resultVariable);
 			}
+		} break;
 
+		case 'check_arg_count': {
+			/* check_arg_count
+				VAR:255 1F 5 check_arg_count argument-number
+				Branches if the given argument-number (counting from 1) has been provided by the routine call
+				to the current routine. (This allows routines in Versions 5 and later to distinguish between the
+				calls routine(1) and routine(1,0), which would otherwise be impossible to tell apart.) */
+			const count = state.stack[state.stack.length - 1].argumentCount;
+			const test = operands[0] === count;
+			if (test === instruction.branchIf) {
+				performBranch(state, instruction.branchOffset);
+			}
 		} break;
 
 		case 'clear_attr': {
@@ -118,7 +171,8 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			/* div
 				2OP:23 17 div a b -> (result)
 				Signed 16-bit division. Division by zero should halt the interpreter with a suitable error message. */
-			const value = (operands[0] / operands[1]) & 0xFFFF;
+			const [a, b] = new Int16Array(operands);
+			const value = (a / b) & 0xFFFF;
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
@@ -324,7 +378,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:16 10 loadb array byte-index -> (result)
 				Stores array->byte-index (i.e., the byte at address array+byte-index, which must lie in static or
 				dynamic memory). */
-			const value = state.memory[operands[0] + operands[1]];
+			const value = state.memory[(operands[0] + operands[1]) & 0xFFFF];
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
@@ -333,7 +387,34 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				2OP:15 F loadw array word-index -> (result)
 				Stores array-->word-index (i.e., the word at address array+2*word-index, which must lie in
 				static or dynamic memory). */
-			const value = read16(state.memory, operands[0] + 2*operands[1]);
+			const value = read16(state.memory, (operands[0] + 2*operands[1]) & 0xFFFF);
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
+		case 'log_shift': {
+			/* log_shift
+				EXT:2 2 5 log_shift number places -> (result)
+				Does a logical shift of number by the given number of places, shifting left (i.e. increasing) if
+				places is positive, right if negative. In a right shift, the sign is zeroed instead of being shifted on.
+				(See also art_shift.) */
+			const number = operands[0];
+			const places = new Int16Array([operands[1]]);
+			let value;
+			if (places < 0) {
+				value = (number >>> (-places)) & 0xFFFF;
+			} else {
+				value = (number << places) & 0xFFFF;
+			}
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
+		case 'mod': {
+			/* mod
+				2OP:24 18 mod a b -> (result)
+				Remainder after signed 16-bit division. Division by zero should halt the interpreter with a suitable
+				error message. */
+			const [a, b] = new Int16Array(operands);
+			const value = (a % b) & 0xFFFF;
 			performStore(state, instruction.resultVariable, value);
 		} break;
 
@@ -352,6 +433,17 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			output.text += '\n';
 		} break;
 
+		case 'not': {
+			/* not
+				1OP:143 F 1/4 not value -> (result)
+				VAR:248 18 5/6 not value -> (result)
+				Bitwise NOT (i.e., all 16 bits reversed). Note that in Versions 3 and 4 this is a 1OP instruction,
+				reasonably since it has 1 operand, but in later Versions it was moved into the extended set to
+				make room for call_1n. */
+			const value = ~(operands[0]) & 0xFFFF;
+			performStore(state, instruction.resultVariable, value);
+		} break;
+
 		case 'or': {
 			/* or
 				2OP:8 8 or a b -> (result)
@@ -365,6 +457,13 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				0OP:178 2 print
 				Print the quoted (literal) Z-encoded string. */
 			output.text += instruction.text;
+		} break;
+
+		case 'print_addr': {
+			/* print_addr
+				1OP:135 7 print_addr byte-address-of-string
+				Print (Z-encoded) string at given byte address, in dynamic or static memory. */
+			output.text += decodeText(state, operands[0]).text;
 		} break;
 
 		case 'print_char': {
@@ -563,11 +662,34 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 			performReturn(state, 1);
 		} break;
 
+		case 'save_undo': {
+			/* save_undo
+				EXT:9 9 5 save_undo -> (result)
+				Like save, except that the optional parameters may not be specified: it saves the game into a
+				cache of memory held by the interpreter. If the interpreter is unable to provide this feature, it
+				must return -1: otherwise it returns the save return value.
+				It is illegal to use this opcode within an interrupt routine (one called asynchronously by a sound
+				effect, or keyboard timing, or newline counting).
+				(This call is typically needed once per turn, in order to implement "UNDO", so it needs to be
+				quick.) */
+			// TODO
+			performStore(state, instruction.resultVariable, (-1)&0xFFFF);
+		} break;
+
 		case 'set_attr': {
 			/* set_attr
 				2OP:11 B set_attr object attribute
 				Make object have the attribute numbered attribute. */
 			setObjectAttribute(state, operands[0], operands[1], true);
+		} break;
+
+		case 'set_text_style': {
+			/* set_text_style
+				VAR:241 11 4 set_text_style style
+				Sets the text style to: Roman (if 0), Reverse Video (if 1), Bold (if 2), Italic (4), Fixed Pitch (8). In
+				some interpreters (though this is not required) a combination of styles is possible (such as reverse
+				video and bold). In these, changing to Roman should turn off all the other styles currently set. */
+			// not implemented
 		} break;
 
 		case 'store': {
@@ -583,7 +705,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				VAR:226 2 storeb array byte-index value
 				array->byte-index = value, i.e. stores the given value in the byte at address array+byte-index
 				(which must lie in dynamic memory). (See loadb.) */
-			const address = operands[0] + operands[1];
+			const address = (operands[0] + operands[1]) & 0xFFFF;
 			state.memory[address] = operands[2];
 		} break;
 
@@ -592,7 +714,7 @@ module.exports = function executeInstruction(state, instruction, operands, outpu
 				VAR:225 1 storew array word-index value
 				array-->word-index = value, i.e. stores the given value in the word at address array+2*wordindex
 				(which must lie in dynamic memory). (See loadw.) */
-			const address = operands[0] + 2*operands[1];
+			const address = (operands[0] + 2*operands[1]) & 0xFFFF;
 			write16(state.memory, address, operands[2]);
 		} break;
 

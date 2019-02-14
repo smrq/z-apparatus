@@ -10,14 +10,16 @@ const TYPE_VARIABLE = 0x2;
 const TYPE_OMITTED = 0x3;
 
 module.exports = function decodeInstruction(state, address) {
+	const startAddress = address;
+
 	const result = { address };
 
 	const opcodeByte = state.memory[address++];
 
 	const form =
+		(getVersion(state) >= 5 && opcodeByte === 0xBE) ? 'extended' :
 		(opcodeByte & 0xC0) === 0xC0 ? 'variable' :
 		(opcodeByte & 0xC0) === 0x80 ? 'short' :
-		(getVersion(state) >= 5 && opcodeByte === 0xBE) ? 'extended' :
 		'long';
 
 	const operandTypes = [];
@@ -41,7 +43,7 @@ module.exports = function decodeInstruction(state, address) {
 		} break;
 
 		case 'extended': {
-			result.opcode = lookupOpcode(state, state.memory[address++], 'VAR');
+			result.opcode = lookupOpcode(state, state.memory[address++], 'EXT');
 		} break;
 	}
 
@@ -108,6 +110,9 @@ module.exports = function decodeInstruction(state, address) {
 	}
 
 	result.nextAddress = address;
-	result.opcodeByte = opcodeByte; // for debugging purposes only
+
+	 // for debugging purposes only
+	result.opcodeByte = opcodeByte;
+	result.raw = state.memory.slice(startAddress, address);
 	return result;
 }

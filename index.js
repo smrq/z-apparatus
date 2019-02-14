@@ -1,6 +1,7 @@
 const fs = require('fs');
 const readline = require('readline');
 const getOpcodeTable = require('./getOpcodeTable');
+const initHeaderFlags = require('./initHeaderFlags');
 const run = require('./run');
 
 const state = init(process.argv[2] || './stories/zork1.z3');
@@ -37,6 +38,8 @@ main(state)
 function init(filename) {
 	const file = fs.readFileSync(filename);
 	const memory = Array.from(file);
+
+	initHeaderFlags(memory);
 
 	return {
 		memory,
