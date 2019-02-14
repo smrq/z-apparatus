@@ -9,7 +9,7 @@ module.exports = function run(state, output, input, random) {
 		throw new Error(`invalid instruction at 0x${state.pc.toString(16)}`);
 	}
 
-	console.error(instructionToString(instruction));
+	// console.error(instructionToString(instruction));
 
 	if (instruction.opcode.input && input == null) {
 		return 'yield';
@@ -21,7 +21,7 @@ module.exports = function run(state, output, input, random) {
 
 	const operands = instruction.operands.map(op => performDereference(state, op));
 
-	console.error('  (' + operands.map(op => op && op.toString(16).padStart(4, 0)).join(' ') + ')');
+	// console.error('  (' + operands.map(op => op && op.toString(16).padStart(4, 0)).join(' ') + ')');
 	// console.error(state.stack);
 
 	// function debugOperand(operand) {

@@ -3,5 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
-  "private": true
+  "private": true,
+  "scripts": {
+  	"zork1": "cat tests/zork1_commands.txt | node index.js stories/zork1.z3 tests/zork1_random.bin",
+  	"praxix": "echo all | node index.js stories/praxix.z5"
+  }
 }
