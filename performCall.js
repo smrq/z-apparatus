@@ -1,15 +1,27 @@
-const decodeRoutine = require('./decodeRoutine');
 const unpackAddress = require('./unpackAddress');
+const { getVersion } = require('./header');
+const { read16 } = require('./rw16');
 
 module.exports = function performCall(state, op, packedAddress, args, resultVariable = null) {
-	const address = unpackAddress(state, op, packedAddress);
-	const { localVariables, firstInstructionAddress } = decodeRoutine(state, address);
+	let address = unpackAddress(state, op, packedAddress);
+	const localVariableCount = state.memory[address++];
+	const localVariables = [];
 
-	args.forEach((arg, i) => {
-		if (localVariables.length > i) {
-			localVariables[i] = args[i];
+	for (let i = 0; i < localVariableCount; ++i) {
+		let value;
+		if (getVersion(state) <= 4) {
+			value = read16(state.memory, address);
+			address += 2;
+		} else {
+			value = 0;
 		}
-	});
+
+		if (i < args.length) {
+			value = args[i];
+		}
+
+		localVariables.push(value);
+	}
 
 	const stackFrame = {
 		stack: [],
@@ -19,5 +31,5 @@ module.exports = function performCall(state, op, packedAddress, args, resultVari
 		nextAddress: state.pc
 	};
 	state.stack.push(stackFrame);
-	state.pc = firstInstructionAddress;
+	state.pc = address;
 }
