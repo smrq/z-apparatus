@@ -111,7 +111,6 @@ module.exports = function decodeInstruction(state, address) {
 	result.nextAddress = address;
 
 	 // for debugging purposes only
-	result.opcodeByte = opcodeByte;
 	result.raw = state.memory.slice(startAddress, address);
 	return result;
 }

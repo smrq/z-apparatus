@@ -51,7 +51,6 @@ module.exports = function parseText(state, text, textBufferAddress, parseTableAd
 			if (word.entry) {
 				write16(state.memory, address, word.entry.address);
 				address += 2;
-				// state.memory[address++] = word.entry.address & 0xFF;
 			} else {
 				state.memory[address++] = 0;
 				state.memory[address++] = 0;
